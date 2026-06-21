@@ -1,0 +1,52 @@
+@import url('https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700&family=Lora:ital,wght@0,400;0,500;0,600;1,400&family=JetBrains+Mono:wght@400;500&display=swap');
+@import "tailwindcss";
+
+@theme {
+  --font-sans: "Inter", ui-sans-serif, system-ui, sans-serif;
+  --font-serif: "Lora", Georgia, serif;
+  --font-display: "Lora", Georgia, serif;
+  --font-mono: "JetBrains Mono", monospace;
+  
+  /* Natural Tones Palette overrides */
+  --color-[#FAF9F6]: #FAF9F6;
+  --color-[#FAF9F6]: #FAF9F6;
+}
+
+body {
+  font-family: var(--font-sans);
+  background-color: #FAF9F6;
+  color: #4A4A40;
+  overflow-x: hidden;
+}
+
+/* Custom scrollbars for pristine look */
+::-webkit-scrollbar {
+  width: 6px;
+  height: 6px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background: #E5E2D9;
+  border-radius: 4px;
+}
+::-webkit-scrollbar-thumb:hover {
+  background: #C5C2B9;
+}
+
+/* Custom animations for natural organic feel */
+.fade-in {
+  animation: fadeIn 0.5s cubic-bezier(0.16, 1, 0.3, 1) forwards;
+}
+
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(6px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}

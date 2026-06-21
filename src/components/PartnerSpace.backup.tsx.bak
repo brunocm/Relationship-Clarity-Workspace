@@ -1,0 +1,988 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useRef, useEffect } from 'react';
+import { 
+  Lock, 
+  Send, 
+  Sparkles, 
+  PenTool, 
+  Plus, 
+  Info, 
+  History, 
+  Trash2, 
+  Lightbulb, 
+  Coins,
+  Mic,
+  Square,
+  Upload,
+  Loader2,
+  ChevronLeft,
+  ChevronRight,
+  ShieldCheck,
+  ChevronDown,
+  ChevronUp,
+  Activity,
+  Compass,
+  Brain
+} from 'lucide-react';
+import { PartnerProfile, JournalEntry, ChatMessage, ConflictContext, SynthesisReport } from '../types';
+import CalibratedReflectionsDeck from './CalibratedReflectionsDeck';
+import PrivateReflectionJournal from './PrivateReflectionJournal';
+import SelfDiscoverySandbox from './SelfDiscoverySandbox';
+
+const GUIDED_JOURNAL_PROMPTS = [
+  {
+    id: 'defensive',
+    label: 'Defensive Reaction Inquiry',
+    placeholder: 'Somatic Trigger:\n- What occurred today:\n- My bodily tension:\n- Defensive shield deployed (withdrawal, hyper-rationalization, blame):\n- The raw vulnerability behind it:',
+    guide: 'Track down where your body tensed up, how you defended yourself, and what softer emotion or vulnerability sat beneath.'
+  },
+  {
+    id: 'excavation',
+    label: 'Underlying Soft Need Excavator',
+    placeholder: 'External Disagreement / Frustration:\n- What I was frustrated by:\n- Hard demand I felt like making (blame):\n- Deep, underlying Soft Need (e.g. "To feel like we are a team", "To check in on safety"):\n- Sincere reassurance that would help me settle:',
+    guide: 'Strip away criticism. Translate demanding statements into deep, vulnerable, soft statements about what would make you feel emotionally safe.'
+  },
+  {
+    id: 'value-anchor',
+    label: 'Values Anchor Reflection',
+    placeholder: 'Relational Priority Affected:\n- Which selected value was impacted:\n- Exact context:\n- How I can propose honoring this value as an invitation (not an indictment):',
+    guide: 'Connect your current irritation to one of your chosen Core Values, formulating an active constructive invitation.'
+  },
+  {
+    id: 'somatic',
+    label: 'Somatic Stress Checkin',
+    placeholder: 'Internal Checkin:\n- Nervous system level (1-10):\n- Bodily feedback (jaw, chest tight, gut twist, restless):\n- Small act of soothing I am taking right now:',
+    guide: 'Inspect your physical body directly. Log somatic tension markers honestly, allowing yourself to settle.'
+  }
+];
+
+interface PartnerSpaceProps {
+  partnerKey: 'partnerA' | 'partnerB';
+  profile: PartnerProfile;
+  partnerName: string;
+  opponentName: string;
+  conflictContext: ConflictContext;
+  updateProfile: (profile: PartnerProfile) => void;
+  onRunSynthesis: () => void;
+  isSynthesizing: boolean;
+  synthesis?: SynthesisReport | null;
+}
+
+export default function PartnerSpace({
+  partnerKey,
+  profile,
+  partnerName,
+  opponentName,
+  conflictContext,
+  updateProfile,
+  onRunSynthesis,
+  isSynthesizing,
+  synthesis,
+}: PartnerSpaceProps) {
+  const [newJournal, setNewJournal] = useState('');
+  const [chatInput, setChatInput] = useState('');
+  const [activePromptIdx, setActivePromptIdx] = useState(0);
+  const [isDeckCollapsed, setIsDeckCollapsed] = useState(false);
+  const [showTechMetrics, setShowTechMetrics] = useState(false);
+
+  // Guided Journaling States
+  const [journalMode, setJournalMode] = useState<'free' | 'guided'>('free');
+  const [selectedGuidedPrompt, setSelectedGuidedPrompt] = useState('');
+
+  // Self-Discovery Exercises
+  const [activeExercise, setActiveExercise] = useState<string | null>(null);
+
+  // Exercise 1: Shadow Mismatch States
+  const [shadowTrigger, setShadowTrigger] = useState('');
+  const [shadowChildhood, setShadowChildhood] = useState('');
+  const [shadowReassurance, setShadowReassurance] = useState('');
+  const [shadowResult, setShadowResult] = useState<{ projectionStr: string; saved: boolean } | null>(null);
+
+  // Exercise 2: Nervous System Map States
+  const [somaticArousal, setSomaticArousal] = useState(5);
+  const [selectedSensations, setSelectedSensations] = useState<string[]>([]);
+  const [isBreathingActive, setIsBreathingActive] = useState(false);
+  const [breathCyclesCompleted, setBreathCyclesCompleted] = useState(0);
+  const [breathPhase, setBreathPhase] = useState<'Inhale' | 'Hold' | 'Exhale' | 'Prepare'>('Prepare');
+  const [breathTimer, setBreathTimer] = useState(0);
+  const [nervousSystemResult, setNervousSystemResult] = useState<string | null>(null);
+
+  // Exercise 3: Soft Need Excavator States
+  const [excavatorDemand, setExcavatorDemand] = useState('');
+  const [excavatorFear, setExcavatorFear] = useState('');
+  const [excavatorCoreNeed, setExcavatorCoreNeed] = useState('Safety & Certainty');
+  const [excavatorResult, setExcavatorResult] = useState<{ blame: string; softNeed: string; pivotText: string; saved: boolean } | null>(null);
+
+  // Exercise 4: Defensive Shield Inventory States
+  const [selectedShield, setSelectedShield] = useState<string | null>(null);
+  const [shieldReflectionText, setShieldReflectionText] = useState('');
+  const [shieldResult, setShieldResult] = useState<{ shield: string; reflection: string; alternative: string; saved: boolean } | null>(null);
+
+  // Breathing timer loop
+  useEffect(() => {
+    let interval: any;
+    if (isBreathingActive) {
+      setBreathPhase('Inhale');
+      setBreathTimer(4);
+      
+      interval = setInterval(() => {
+        setBreathTimer(prev => {
+          if (prev <= 1) {
+            let nextPhase: 'Inhale' | 'Hold' | 'Exhale' = 'Inhale';
+            let duration = 4;
+            setBreathPhase(curr => {
+              if (curr === 'Inhale') {
+                nextPhase = 'Hold';
+                duration = 4;
+              } else if (curr === 'Hold') {
+                nextPhase = 'Exhale';
+                duration = 7;
+              } else if (curr === 'Exhale') {
+                nextPhase = 'Inhale';
+                duration = 4;
+                setBreathCyclesCompleted(c => c + 1);
+              }
+              return nextPhase;
+            });
+            return duration;
+          }
+          return prev - 1;
+        });
+      }, 1000);
+    } else {
+      setBreathPhase('Prepare');
+      setBreathTimer(0);
+      setBreathCyclesCompleted(0);
+    }
+    return () => clearInterval(interval);
+  }, [isBreathingActive]);
+
+  const saveExerciseToJournal = (title: string, summaryText: string) => {
+    const entry: JournalEntry = {
+      id: `exercise-${Date.now()}`,
+      content: `[🧬 INTERACTIVE DIAGNOSTIC: ${title}]\n\n${summaryText}`,
+      timestamp: new Date().toLocaleDateString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      sentiment: "Constructive / Refined",
+      keyIssues: ["Self-Discovery", "Therapeutic Pivot"]
+    };
+
+    const updatedJournal = [entry, ...profile.journalEntries];
+    updateProfile({
+      ...profile,
+      journalEntries: updatedJournal
+    });
+  };
+
+  // Vocal journaling states & audio processing
+  const [isRecording, setIsRecording] = useState(false);
+  const [recordingDuration, setRecordingDuration] = useState(0);
+  const [transcribing, setTranscribing] = useState(false);
+  const [audioError, setAudioError] = useState('');
+  const [mediaRecorder, setMediaRecorder] = useState<MediaRecorder | null>(null);
+  const timerRef = useRef<any>(null);
+
+  const startRecording = async () => {
+    setAudioError('');
+    try {
+      const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+      const recorder = new MediaRecorder(stream);
+      const chunks: Blob[] = [];
+
+      recorder.ondataavailable = (e) => {
+        if (e.data.size > 0) {
+          chunks.push(e.data);
+        }
+      };
+
+      recorder.onstop = async () => {
+        const blob = new Blob(chunks, { type: 'audio/webm' });
+        await processAudioForJournal(blob);
+        stream.getTracks().forEach(track => track.stop());
+      };
+
+      recorder.start();
+      setMediaRecorder(recorder);
+      setIsRecording(true);
+      setRecordingDuration(0);
+
+      timerRef.current = setInterval(() => {
+        setRecordingDuration(prev => prev + 1);
+      }, 1000);
+    } catch (err: any) {
+      console.error(err);
+      setAudioError("Microphone blocked. Please verify permissions or upload a voice memo file directly.");
+    }
+  };
+
+  const stopRecording = () => {
+    if (mediaRecorder && isRecording) {
+      mediaRecorder.stop();
+      setIsRecording(false);
+      if (timerRef.current) {
+        clearInterval(timerRef.current);
+      }
+    }
+  };
+
+  const convertBlobToBase64 = (blob: Blob): Promise<string> => {
+    return new Promise((resolve, reject) => {
+      const reader = new FileReader();
+      reader.onloadend = () => {
+        const base64String = (reader.result as string).split(',')[1];
+        resolve(base64String);
+      };
+      reader.onerror = reject;
+      reader.readAsDataURL(blob);
+    });
+  };
+
+  const handleJournalFileUpload = async (e: React.ChangeEvent<HTMLInputElement>) => {
+    setAudioError('');
+    const file = e.target.files?.[0];
+    if (file) {
+      // Check if file is audio or text
+      const isAudio = file.type.startsWith('audio/') || /\.(mp3|wav|m4a|ogg|webm|flac|aac)$/i.test(file.name);
+      
+      if (isAudio) {
+        if (file.size > 15 * 1024 * 1024) {
+          setAudioError("Audio file size exceeds the 15MB limit.");
+          return;
+        }
+        await processAudioForJournal(file);
+      } else {
+        // Assume text file
+        if (file.size > 5 * 1024 * 1024) {
+          setAudioError("Text file size exceeds the 5MB limit.");
+          return;
+        }
+        setTranscribing(true);
+        try {
+          const reader = new FileReader();
+          reader.onload = (event) => {
+            const text = event.target?.result as string;
+            if (text) {
+              setNewJournal(prev => prev ? prev + "\n" + text : text);
+            }
+            setTranscribing(false);
+          };
+          reader.onerror = () => {
+            setAudioError("Failed to read text file.");
+            setTranscribing(false);
+          };
+          reader.readAsText(file);
+        } catch (err: any) {
+          setAudioError("Error processing text file: " + err.message);
+          setTranscribing(false);
+        }
+      }
+    }
+  };
+
+  const processAudioForJournal = async (blob: Blob) => {
+    setTranscribing(true);
+    setAudioError('');
+    try {
+      const base64 = await convertBlobToBase64(blob);
+      const res = await fetch('/api/transcribe-audio', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          audioData: base64,
+          mimeType: blob.type || 'audio/webm'
+        })
+      });
+
+      if (!res.ok) {
+        throw new Error("Voice note decoder failed to process transcript.");
+      }
+
+      const data = await res.json();
+      setNewJournal(prev => prev ? prev + " " + data.text : data.text);
+    } catch (err: any) {
+      console.error(err);
+      setAudioError("Vocal transcription error: " + err.message);
+    } finally {
+      setTranscribing(false);
+    }
+  };
+
+  const formatDuration = (sec: number) => {
+    const m = Math.floor(sec / 60);
+    const s = sec % 60;
+    return `${m}:${s < 10 ? '0' : ''}${s}`;
+  };
+  const [isSending, setIsSending] = useState(false);
+  const [showValuesModal, setShowValuesModal] = useState(false);
+  const [activeTab, setActiveTab] = useState<'chat' | 'journal' | 'sandbox'>('chat');
+  
+  const chatBottomRef = useRef<HTMLDivElement>(null);
+
+  // Scroll to bottom of chat when history changes
+  useEffect(() => {
+    chatBottomRef.current?.scrollIntoView({ behavior: 'smooth' });
+  }, [profile.chatHistory]);
+
+  // Available selectable value keywords
+  const AVAILABLE_VALUES = [
+    "Security & Peace", "Autonomy & Freedom", "Emotional Harmonization", 
+    "Strict Honesty", "Financial Buffer", "Flexible Cadence", 
+    "Immediate Reassurance", "Structured Responsibility", "Patience", 
+    "Shared Domestic Order", "Future Ambition", "Family Safety"
+  ];
+
+  // Budget/Spreadsheet handler (if applicable to conflict context)
+  const [newBudgetLabel, setNewBudgetLabel] = useState('');
+  const [newBudgetAmount, setNewBudgetAmount] = useState('');
+
+  const addBudgetItem = () => {
+    if (!newBudgetLabel || !newBudgetAmount) return;
+    const amount = parseFloat(newBudgetAmount);
+    if (isNaN(amount)) return;
+
+    const originalWorksheet = conflictContext.worksheetData || { partnerA_budget: [], partnerB_budget: [] };
+    const fieldKey = partnerKey === 'partnerA' ? 'partnerA_budget' : 'partnerB_budget';
+    
+    // In our simplified workflow, we push a journal entry tracking this simulation adjustment
+    profile.journalEntries.push({
+      id: Date.now().toString(),
+      content: `[Automated Budget Update] Added budget allocate for "${newBudgetLabel}": $${amount}`,
+      timestamp: new Date().toLocaleTimeString(),
+      sentiment: "Neutral",
+      keyIssues: ["Finances"]
+    });
+
+    updateProfile({ ...profile });
+    setNewBudgetLabel('');
+    setNewBudgetAmount('');
+  };
+
+  const handleAddJournal = (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!newJournal.trim()) return;
+
+    const entry: JournalEntry = {
+      id: Date.now().toString(),
+      content: newJournal,
+      timestamp: new Date().toLocaleDateString(undefined, {
+        hour: '2-digit',
+        minute: '2-digit'
+      }),
+      sentiment: analyzeSimpleSentiment(newJournal),
+      keyIssues: extractKeywords(newJournal)
+    };
+
+    const updatedJournal = [entry, ...profile.journalEntries];
+    updateProfile({
+      ...profile,
+      journalEntries: updatedJournal
+    });
+    setNewJournal('');
+    setJournalMode('free');
+    setSelectedGuidedPrompt('');
+  };
+
+  const handleDeleteJournal = (id: string) => {
+    updateProfile({
+      ...profile,
+      journalEntries: profile.journalEntries.filter(entry => entry.id !== id)
+    });
+  };
+
+  const toggleValue = (value: string) => {
+    let currentValues = [...profile.coreValues];
+    if (currentValues.includes(value)) {
+      currentValues = currentValues.filter(v => v !== value);
+    } else {
+      currentValues.push(value);
+    }
+    updateProfile({
+      ...profile,
+      coreValues: currentValues
+    });
+  };
+
+  const getAdaptiveCalibrator = () => {
+    const ratingsObj = profile.reflectionRatings || {};
+    const scores = Object.values(ratingsObj) as number[];
+    if (scores.length === 0) {
+      return { threshold: 7, mean: 0.0, count: 0, status: 'Default Equilibrium' };
+    }
+    const sum = scores.reduce((a, b) => a + b, 0);
+    const mean = sum / scores.length;
+    
+    let threshold = 7;
+    let status = 'Standard Calibration';
+    
+    if (scores.length >= 3) {
+      if (mean >= 8.0) {
+        threshold = 8;
+        status = 'High-Intensity Downscaling (Adapts threshold to keep focus on high priorities)';
+      } else if (mean >= 9.0) {
+        threshold = 9;
+        status = 'Maximum Shield (Only absolute spikes bypass filter)';
+      } else if (mean <= 5.2) {
+        threshold = 5;
+        status = 'Low-Intensity Upscaling (Sensitized to subtle conflict waves)';
+      } else if (mean <= 3.5) {
+        threshold = 4;
+        status = 'Hyper-Sensitive Baseline Tuning';
+      } else {
+        status = 'Custom Adaptive Equilibrium';
+      }
+    } else {
+      status = 'Calibrating Baseline (Need at least 3 ratings to auto-adjust)';
+    }
+
+    return { 
+      threshold, 
+      mean: parseFloat(mean.toFixed(1)), 
+      count: scores.length, 
+      status 
+    };
+  };
+
+  const handleRatingChange = (prompt: string, rating: number) => {
+    const currentRatings = profile.reflectionRatings || {};
+    updateProfile({
+      ...profile,
+      reflectionRatings: {
+        ...currentRatings,
+        [prompt]: rating
+      }
+    });
+  };
+
+  const handleEngageInquiry = async (prompt: string) => {
+    if (isSending) return;
+    const resonance = profile.reflectionRatings?.[prompt] ?? 5;
+    
+    // Create an elegant, rich and contextual prompt for deep engagement
+    const engagementMessage = `I want to explore this private sanctuary inquiry in depth:
+"${prompt}"
+
+I assess this dynamic at a high-fidelity resonance of ${resonance}/10. Counselor, how is this friction reflecting my deeper core values or blindspots, and how can I express this vulnerability to my partner without escalation?`;
+
+    const userMsg: ChatMessage = {
+      id: `chat-usr-${Date.now()}`,
+      sender: 'user',
+      content: engagementMessage,
+      timestamp: new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    };
+
+    const updatedHistoryWithUser = [...profile.chatHistory, userMsg];
+    updateProfile({
+      ...profile,
+      chatHistory: updatedHistoryWithUser,
+      reflectionRatings: {
+        ...(profile.reflectionRatings || {}),
+        [prompt]: resonance
+      }
+    });
+    setChatInput('');
+    setIsSending(true);
+
+    try {
+      const response = await fetch('/api/partner-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partnerName,
+          partnerKey,
+          partnerProfile: { 
+            ...profile, 
+            chatHistory: updatedHistoryWithUser,
+            reflectionRatings: {
+              ...(profile.reflectionRatings || {}),
+              [prompt]: resonance
+            }
+          },
+          injections: profile.hiddenInjectedReflections,
+          message: userMsg.content,
+          conflictContext,
+        })
+      });
+
+      const data = await response.json();
+      const assistantMsg: ChatMessage = {
+        id: `chat-ast-${Date.now()}`,
+        sender: 'assistant',
+        content: data.reply || "I am processing your words. Let us reflect deeply together.",
+        timestamp: new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+      };
+
+      updateProfile({
+        ...profile,
+        chatHistory: [...updatedHistoryWithUser, assistantMsg],
+        reflectionRatings: {
+          ...(profile.reflectionRatings || {}),
+          [prompt]: resonance
+        }
+      });
+
+    } catch (err) {
+      console.error(err);
+      const errMsg: ChatMessage = {
+        id: `chat-ast-err-${Date.now()}`,
+        sender: 'assistant',
+        content: "I ran into a temporary technical block, but I am still listening. How can we make this dialogue feel safe for both of you?",
+        timestamp: new Date().toLocaleTimeString()
+      };
+      updateProfile({
+        ...profile,
+        chatHistory: [...updatedHistoryWithUser, errMsg]
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const handleSendChat = async (e: React.FormEvent) => {
+    e.preventDefault();
+    if (!chatInput.trim() || isSending) return;
+
+    const userMsg: ChatMessage = {
+      id: `chat-usr-${Date.now()}`,
+      sender: 'user',
+      content: chatInput,
+      timestamp: new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+    };
+
+    const updatedHistoryWithUser = [...profile.chatHistory, userMsg];
+    updateProfile({
+      ...profile,
+      chatHistory: updatedHistoryWithUser
+    });
+    setChatInput('');
+    setIsSending(true);
+
+    try {
+      const response = await fetch('/api/partner-chat', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partnerName,
+          partnerKey,
+          partnerProfile: { ...profile, chatHistory: updatedHistoryWithUser },
+          injections: profile.hiddenInjectedReflections,
+          message: userMsg.content,
+          conflictContext,
+        })
+      });
+
+      const data = await response.json();
+      const assistantMsg: ChatMessage = {
+        id: `chat-ast-${Date.now()}`,
+        sender: 'assistant',
+        content: data.reply || "I am processing your words. Let us reflect deeply together.",
+        timestamp: new Date().toLocaleTimeString(undefined, { hour: '2-digit', minute: '2-digit' })
+      };
+
+      const replyLower = (data.reply || "").toLowerCase();
+      const userLower = userMsg.content.toLowerCase();
+      
+      const unlockedSet = new Set<string>(profile.unlockedExercises || ['nervous-system-map']);
+      
+      if (replyLower.includes("shadow") || replyLower.includes("projection") || userLower.includes("projection") || userLower.includes("shadow")) {
+        unlockedSet.add("shadow-mismatch");
+      }
+      if (replyLower.includes("soft need") || replyLower.includes("excavator") || replyLower.includes("vulnerable need") || userLower.includes("soft need") || userLower.includes("excavator")) {
+        unlockedSet.add("soft-need-excavator");
+      }
+      if (replyLower.includes("defensive shield") || replyLower.includes("shield inventory") || replyLower.includes("stonewall") || replyLower.includes("defense mechanism") || userLower.includes("shield")) {
+        unlockedSet.add("defensive-shield-inventory");
+      }
+      
+      const newUnlockedExercises = Array.from(unlockedSet);
+
+      updateProfile({
+        ...profile,
+        chatHistory: [...updatedHistoryWithUser, assistantMsg],
+        unlockedExercises: newUnlockedExercises
+      });
+
+    } catch (err) {
+      console.error(err);
+      const errMsg: ChatMessage = {
+        id: `chat-ast-err-${Date.now()}`,
+        sender: 'assistant',
+        content: "I ran into a temporary technical block, but I am still listening. How can we make this dialogue feel safe for both of you?",
+        timestamp: new Date().toLocaleTimeString()
+      };
+      updateProfile({
+        ...profile,
+        chatHistory: [...updatedHistoryWithUser, errMsg]
+      });
+    } finally {
+      setIsSending(false);
+    }
+  };
+
+  const injectPromptIntoChat = (prompt: string) => {
+    setChatInput(prompt);
+  };
+
+  // Helper sentiment analysis
+  const analyzeSimpleSentiment = (text: string) => {
+    const lower = text.toLowerCase();
+    const defensiveWords = ["hurts", "angry", "never", "always", "blame", "sad", "frustrated", "unfair", "tired"];
+    const constructiveWords = ["understand", "space", "calm", "love", "compromise", "patience", "listen"];
+    
+    let defensiveCount = 0;
+    let constructiveCount = 0;
+
+    defensiveWords.forEach(w => { if (lower.includes(w)) defensiveCount++; });
+    constructiveWords.forEach(w => { if (lower.includes(w)) constructiveCount++; });
+
+    if (defensiveCount > constructiveCount) return "Guarded / Evocative";
+    if (constructiveCount > defensiveCount) return "Constructive / Refined";
+    return "Neutral / Analytical";
+  };
+
+  const extractKeywords = (text: string) => {
+    const list: string[] = [];
+    const lower = text.toLowerCase();
+    if (lower.includes("money") || lower.includes("spend") || lower.includes("budget") || lower.includes("cost")) list.push("Finances");
+    if (lower.includes("clean") || lower.includes("dishes") || lower.includes("chore") || lower.includes("mess")) list.push("Domestic Work");
+    if (lower.includes("career") || lower.includes("job") || lower.includes("office") || lower.includes("work")) list.push("Employment");
+    if (lower.includes("space") || lower.includes("silent") || lower.includes("talk") || lower.includes("listen")) list.push("Pacing");
+    if (list.length === 0) list.push("Intimacy");
+    return list;
+  };
+
+  // Natural Tones color mapping
+  const isA = partnerKey === 'partnerA';
+  const accentBorder = 'border-[#E5E2D9]';
+  const fontAccent = isA ? 'text-[#5A5A40]' : 'text-[#D18B6B]';
+  const badgeBg = isA 
+    ? 'bg-[#8DA58D]/10 text-[#546B54] border-[#8DA58D]/30' 
+    : 'bg-[#D18B6B]/10 text-[#D18B6B] border-[#D18B6B]/30';
+  const userBubbleBg = isA ? 'bg-[#5A5A40]' : 'bg-[#D18B6B]';
+
+  return (
+    <div id={`partner-space-${partnerKey}`} className="space-y-6 max-w-7xl mx-auto py-6 px-4 animate-fade-in text-left">
+      
+      {/* Private Sanctuary Header Banner row */}
+      <div className="bg-white rounded-2xl p-6 border border-[#E5E2D9] shadow-xs relative overflow-hidden flex flex-col md:flex-row justify-between items-start md:items-center gap-4">
+        <div className="absolute top-4 right-4 md:static">
+          <div className="flex items-center gap-1.5 px-2.5 py-1 bg-[#FAF9F6] border border-[#E5E2D9] text-[#8C8C7F] rounded-lg text-[10px] uppercase font-mono font-bold">
+            <Lock className="w-3.5 h-3.5 text-[#A8A89A]" />
+            Fully Private Partition
+          </div>
+        </div>
+
+        <div className="space-y-1">
+          <span className="text-[10.5px] font-mono uppercase tracking-widest text-[#8C8C7F] block">
+            Sandbox Partition {isA ? 'A' : 'B'}
+          </span>
+          <h2 className="text-xl md:text-2xl font-serif text-[#33332D] font-bold">
+            {partnerName}'s Room
+          </h2>
+          <p className="text-xs text-[#6B6B5E] leading-relaxed max-w-2xl">
+            Protected by local partition security. Your partner, <b className="text-[#33332D]">{opponentName}</b>, cannot view your journal entries, active diagnostic exercise answers, or private chat transcripts.
+          </p>
+        </div>
+
+        {/* Core items tag list inside the header */}
+        <div className="flex flex-wrap gap-1.5 items-center md:justify-end max-w-md">
+          {profile.coreValues.map((val, idx) => (
+            <span key={idx} className={`text-[10.5px] px-2.5 py-1 rounded-full border font-medium ${badgeBg}`}>
+              {val}
+            </span>
+          ))}
+          <button
+            id={`toggle-values-btn-${partnerKey}`}
+            onClick={() => setShowValuesModal(!showValuesModal)}
+            className="text-[10px] px-2.5 py-1 rounded-full border border-dashed border-[#E5E2D9] text-[#6B6B5E] hover:bg-[#FAF9F6] transition font-mono flex items-center gap-1 cursor-pointer"
+          >
+            <Plus className="w-2.5 h-2.5" /> Adjust Priorities
+          </button>
+        </div>
+      </div>
+
+      {/* Dynamic Core Boundaries Selector Sheet */}
+      {showValuesModal && (
+        <div id="values-selector-sheet" className="p-5 bg-white border border-[#E5E2D9] rounded-2xl shadow-xs space-y-3 animate-fade-in text-left">
+          <div className="flex justify-between items-center">
+            <div>
+              <h4 className="text-xs font-mono font-bold text-[#4A4A40] uppercase tracking-wider block">Select Relational Core Needs</h4>
+              <p className="text-[10px] text-[#8C8C7F] mt-0.5">Define your core personal boundaries so the AI counselor can guide agreements to safeguard them.</p>
+            </div>
+            <button 
+              type="button"
+              onClick={() => setShowValuesModal(false)} 
+              className="text-[10px] bg-[#FAF9F6] hover:bg-white text-[#4A4A40] border border-[#E5E2D9] px-3 py-1.5 rounded-lg font-mono cursor-pointer transition shadow-3xs"
+            >
+              Save & Close
+            </button>
+          </div>
+          <div className="grid grid-cols-2 sm:grid-cols-4 gap-1.5 font-sans">
+            {AVAILABLE_VALUES.map((val, idx) => {
+              const selected = profile.coreValues.includes(val);
+              return (
+                <button
+                  id={`value-opt-${partnerKey}-${idx}`}
+                  key={idx}
+                  type="button"
+                  onClick={() => toggleValue(val)}
+                  className={`p-2 rounded-lg text-left text-[11px] border transition cursor-pointer ${
+                    selected 
+                      ? isA ? 'bg-[#8DA58D]/10 border-[#8DA58D] text-[#546B54] font-medium shadow-3xs' : 'bg-[#D18B6B]/10 border-[#D18B6B] text-[#D18B6B] font-medium shadow-3xs'
+                      : 'bg-[#FAF9F6] border-[#E5E2D9] text-[#6B6B5E] hover:bg-[#F5F2ED]'
+                  }`}
+                >
+                  {val}
+                </button>
+              );
+            })}
+          </div>
+        </div>
+      )}
+
+      {/* 3-Tab Selector Bar */}
+      <div className="flex border-b border-[#E5E2D9] gap-4 w-full">
+        <button
+          type="button"
+          onClick={() => { setActiveTab('chat'); setActiveExercise(null); }}
+          className={`pb-3 text-xs font-mono uppercase tracking-wider transition relative font-semibold cursor-pointer flex items-center gap-2 ${
+            activeTab === 'chat' ? 'text-[#33332D] font-bold' : 'text-[#8C8C7F] hover:text-[#4A4A40]'
+          }`}
+        >
+          <Send className="w-3.5 h-3.5" />
+          <span>💬 Dialogue Companion</span>
+          {activeTab === 'chat' && (
+            <span className={`absolute bottom-0 left-0 right-0 h-0.5 ${isA ? 'bg-[#5A5A40]' : 'bg-[#D18B6B]'}`} />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveTab('journal'); setActiveExercise(null); }}
+          className={`pb-3 text-xs font-mono uppercase tracking-wider transition relative font-semibold cursor-pointer flex items-center gap-2 ${
+            activeTab === 'journal' ? 'text-[#33332D] font-bold' : 'text-[#8C8C7F] hover:text-[#4A4A40]'
+          }`}
+        >
+          <PenTool className="w-3.5 h-3.5" />
+          <span>📓 Private Journal & Ventilation</span>
+          {activeTab === 'journal' && (
+            <span className={`absolute bottom-0 left-0 right-0 h-0.5 ${isA ? 'bg-[#5A5A40]' : 'bg-[#D18B6B]'}`} />
+          )}
+        </button>
+        <button
+          type="button"
+          onClick={() => { setActiveTab('sandbox'); setActiveExercise(null); }}
+          className={`pb-3 text-xs font-mono uppercase tracking-wider transition relative font-semibold cursor-pointer flex items-center gap-2 ${
+            activeTab === 'sandbox' ? 'text-[#33332D] font-bold' : 'text-[#8C8C7F] hover:text-[#4A4A40]'
+          }`}
+        >
+          <Brain className="w-3.5 h-3.5 animate-pulse" />
+          <span>🧬 Self-Discovery Sandbox</span>
+          {activeTab === 'sandbox' && (
+            <span className={`absolute bottom-0 left-0 right-0 h-0.5 ${isA ? 'bg-[#5A5A40]' : 'bg-[#D18B6B]'}`} />
+          )}
+        </button>
+      </div>
+
+      {/* Tab Panel Content renders */}
+      {activeTab === 'chat' && (
+        <div className="space-y-6 animate-fade-in">
+          
+          {/* Calibrated Inquiry deck at top of conversation, non-invasive */}
+          <CalibratedReflectionsDeck
+            profile={profile}
+            isA={isA}
+            isSending={isSending}
+            opponentName={opponentName}
+            getAdaptiveCalibrator={getAdaptiveCalibrator}
+            handleRatingChange={handleRatingChange}
+            handleEngageInquiry={handleEngageInquiry}
+          />
+
+          {/* Core Priv Dialogue Chat box */}
+          <div className="bg-white rounded-2xl border border-[#E5E2D9] shadow-xs flex flex-col h-[600px] overflow-hidden">
+            <div className="px-6 py-4 border-b border-[#E5E2D9] bg-[#FAF9F6] flex justify-between items-center">
+              <div className="flex items-center gap-3">
+                <div className={`w-8 h-8 rounded-full flex items-center justify-center ${isA ? 'bg-[#8DA58D]/20 text-[#546B54]' : 'bg-[#D18B6B]/20 text-[#D18B6B]'}`}>
+                  <Sparkles className="w-4 h-4" />
+                </div>
+                <div>
+                  <div className="text-sm font-serif italic text-[#33332D] font-bold bg-[#FAF9F6]">Relational Counselor Companion</div>
+                  <div className="text-[10px] text-[#8C8C7F] font-mono">Unbiased Partner Calibration</div>
+                </div>
+              </div>
+
+              <div>
+                <button
+                  id="force-synthesis-btn-space"
+                  type="button"
+                  onClick={onRunSynthesis}
+                  disabled={isSynthesizing}
+                  className="text-[10px] font-mono px-3 py-1.5 bg-white border border-[#E5E2D9] rounded-lg hover:bg-[#FAF9F6] transition flex items-center gap-1.5 active:scale-95 cursor-pointer shadow-3xs"
+                >
+                  <div className={`w-1.5 h-1.5 rounded-full ${isSynthesizing ? 'bg-[#D18B6B] animate-ping' : 'bg-[#8DA58D]'}`} />
+                  {isSynthesizing ? "Analyzing Dynamics..." : "Sync Relationship Report"}
+                </button>
+              </div>
+            </div>
+
+            {/* Scroller Area */}
+            <div id="messages-scroller" className="flex-1 overflow-y-auto p-6 space-y-4">
+              
+              <div className="bg-[#FAF9F6] p-4 rounded-xl border border-[#E5E2D9] space-y-2 max-w-xl mx-auto text-center font-sans shadow-3xs">
+                <div className="inline-flex items-center justify-center px-2 py-0.5 rounded-full bg-[#E5E2D9]/60 text-[9px] text-[#4A4A40] font-mono font-bold tracking-wide">
+                  SAFE DIALOGUE PARADIGM
+                </div>
+                <p className="text-[11px] text-[#6B6B5E] leading-relaxed italic">
+                  Welcome to {partnerName}'s private query engine. Discuss actions, project stressors, somatic signals, or ask coordinates securely. The system uses your private entries behind the scenes to direct synthesis, avoiding defensive standoffs.
+                </p>
+              </div>
+
+              {profile.chatHistory.map((msg) => {
+                const isUser = msg.sender === 'user';
+                return (
+                  <div
+                    key={msg.id}
+                    className={`flex ${isUser ? 'justify-end' : 'justify-start'} animate-fade-in`}
+                  >
+                    <div
+                      className={`max-w-[75%] rounded-2xl px-4 py-3 text-xs leading-relaxed ${
+                        isUser
+                          ? `${userBubbleBg} text-white shadow-xs rounded-br-none`
+                          : 'bg-[#F2EFE8] border border-[#E5E2D9] text-[#4A4A40] rounded-bl-none'
+                      }`}
+                    >
+                      <p className="whitespace-pre-line font-sans">{msg.content}</p>
+                      <div className="mt-1.5 flex items-center justify-between text-[8px] opacity-75">
+                        <span>{msg.timestamp}</span>
+                        {msg.injectedFromSynthesis && (
+                          <span className="font-mono text-[7.5px] text-[#8DA58D] uppercase font-bold tracking-wider">Injected Prompt</span>
+                        )}
+                      </div>
+                    </div>
+                  </div>
+                );
+              })}
+
+              {isSending && (
+                <div className="flex justify-start">
+                  <div className="bg-[#FAF9F6] border border-[#E5E2D9] rounded-2xl rounded-bl-none px-4 py-3 text-xs text-[#6B6B5E] flex items-center gap-2 shadow-3xs">
+                    <div className="flex gap-1">
+                      <span className="w-1.5 h-1.5 bg-[#8DA58D] rounded-full animate-bounce" style={{ animationDelay: '0ms' }} />
+                      <span className="w-1.5 h-1.5 bg-[#8DA58D] rounded-full animate-bounce" style={{ animationDelay: '150ms' }} />
+                      <span className="w-1.5 h-1.5 bg-[#8DA58D] rounded-full animate-bounce" style={{ animationDelay: '300ms' }} />
+                    </div>
+                    <span className="font-serif italic font-medium">Re-calibrating safety barriers...</span>
+                  </div>
+                </div>
+              )}
+
+              <div ref={chatBottomRef} />
+            </div>
+
+            {/* Input Form */}
+            <div className="p-4 border-t border-[#E5E2D9] bg-[#F5F2ED]">
+              <form onSubmit={handleSendChat} className="flex gap-2">
+                <input
+                  id={`${partnerKey}-chat-typings`}
+                  type="text"
+                  className="flex-1 bg-white border border-[#E5E2D9] rounded-xl px-4 py-3 text-xs text-[#4A4A40] focus:outline-none focus:ring-1 focus:ring-[#8DA58D] shadow-2xs"
+                  placeholder="Type advice on triggers, ask about projection patterns, or mention defenses to unlock exercises..."
+                  value={chatInput}
+                  onChange={(e) => setChatInput(e.target.value)}
+                  disabled={isSending}
+                />
+                <button
+                  id={`send-chat-btn-${partnerKey}`}
+                  type="submit"
+                  disabled={isSending || !chatInput.trim()}
+                  className={`p-3 rounded-xl text-white transition active:scale-95 disabled:opacity-50 disabled:active:scale-100 cursor-pointer ${
+                    isA ? 'bg-[#5A5A40] hover:bg-[#4A4A35]' : 'bg-[#D18B6B] hover:bg-[#C17B5B]'
+                  }`}
+                >
+                  <Send className="w-4 h-4" />
+                </button>
+              </form>
+            </div>
+          </div>
+
+        </div>
+      )}
+
+      {activeTab === 'journal' && (
+        <PrivateReflectionJournal
+          profile={profile}
+          partnerKey={partnerKey}
+          isA={isA}
+          newJournal={newJournal}
+          setNewJournal={setNewJournal}
+          journalMode={journalMode}
+          setJournalMode={setJournalMode}
+          selectedGuidedPrompt={selectedGuidedPrompt}
+          setSelectedGuidedPrompt={setSelectedGuidedPrompt}
+          GUIDED_JOURNAL_PROMPTS={GUIDED_JOURNAL_PROMPTS}
+          handleAddJournal={handleAddJournal}
+          handleDeleteJournal={handleDeleteJournal}
+          audioError={audioError}
+          isRecording={isRecording}
+          recordingDuration={recordingDuration}
+          transcribing={transcribing}
+          startRecording={startRecording}
+          stopRecording={stopRecording}
+          handleJournalFileUpload={handleJournalFileUpload}
+          formatDuration={formatDuration}
+          conflictTopic={conflictContext.topic}
+          newBudgetLabel={newBudgetLabel}
+          setNewBudgetLabel={setNewBudgetLabel}
+          newBudgetAmount={newBudgetAmount}
+          setNewBudgetAmount={setNewBudgetAmount}
+          addBudgetItem={addBudgetItem}
+        />
+      )}
+
+      {activeTab === 'sandbox' && (
+        <SelfDiscoverySandbox
+          profile={profile}
+          partnerKey={partnerKey}
+          isA={isA}
+          opponentName={opponentName}
+          updateProfile={updateProfile}
+          saveExerciseToJournal={saveExerciseToJournal}
+          activeExercise={activeExercise}
+          setActiveExercise={setActiveExercise}
+          synthesis={synthesis}
+          somaticArousal={somaticArousal}
+          setSomaticArousal={setSomaticArousal}
+          selectedSensations={selectedSensations}
+          setSelectedSensations={setSelectedSensations}
+          isBreathingActive={isBreathingActive}
+          setIsBreathingActive={setIsBreathingActive}
+          breathCyclesCompleted={breathCyclesCompleted}
+          breathPhase={breathPhase}
+          breathTimer={breathTimer}
+          shadowTrigger={shadowTrigger}
+          setShadowTrigger={setShadowTrigger}
+          shadowChildhood={shadowChildhood}
+          setShadowChildhood={setShadowChildhood}
+          shadowReassurance={shadowReassurance}
+          setShadowReassurance={setShadowReassurance}
+          excavatorDemand={excavatorDemand}
+          setExcavatorDemand={setExcavatorDemand}
+          excavatorFear={excavatorFear}
+          setExcavatorFear={setExcavatorFear}
+          excavatorCoreNeed={excavatorCoreNeed}
+          setExcavatorCoreNeed={setExcavatorCoreNeed}
+          selectedShield={selectedShield}
+          setSelectedShield={setSelectedShield}
+          shieldReflectionText={shieldReflectionText}
+          setShieldReflectionText={setShieldReflectionText}
+        />
+      )}
+
+    </div>
+  );
+}

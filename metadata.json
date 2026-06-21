@@ -1,0 +1,6 @@
+{
+  "name": "Soma Align",
+  "description": "A high-fidelity full-stack platform for somatic and behavioral alignment in relational dynamics, delivering private reflection spaces, active breathing co-regulation, and clinical-grade therapeutic synthesis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

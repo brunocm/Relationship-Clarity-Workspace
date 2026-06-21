@@ -1,0 +1,522 @@
+/**
+ * @license
+ * SPDX-License-Identifier: Apache-2.0
+ */
+
+import React, { useState, useEffect } from 'react';
+import { 
+  Heart, 
+  Sparkles, 
+  Lock, 
+  LogOut,
+  ChevronRight
+} from 'lucide-react';
+
+import { PartnerProfile, ConflictContext, SynthesisReport, ScheduledDialogue } from './types';
+import IntroductionPanel from './components/IntroductionPanel';
+import PartnerSpace from './components/PartnerSpace';
+import SynthesisHub from './components/SynthesisHub';
+
+export default function App() {
+  const [partnerAName, setPartnerAName] = useState('Alex');
+  const [partnerBName, setPartnerBName] = useState('Taylor');
+  
+  const [activeWorkspace, setActiveWorkspace] = useState<'intro' | 'partnerA' | 'partnerB' | 'synthesis'>('intro');
+
+  // Dynamic generators to scale local client fallback states to 10X entries
+  const localGeneratePartnerA = () => {
+    const baseA = [
+      {
+        content: "I feel incredible anxiety during our disagreements. Taylor shuts down, turns away, or leaves the room entirely, which feels like a total withdrawal of connection and care. I just want to address the tension right away to get reassurance. When I push for clarity, they treat me like an interrogator.",
+        sentiment: "High Alert",
+        keyIssues: ["Pacing"]
+      },
+      {
+        content: "Yesterday when we were trying to plan our weekend trip chores, I drafted a structured schedule. Taylor immediately sighed, rolled their eyes, and walked out to go for a run. I felt so abandoned and invisible. Why is order and predictability viewed as a prison by them?",
+        sentiment: "Frustrated",
+        keyIssues: ["Responsibility", "Pacing"]
+      },
+      {
+        content: "Sometimes I think that if we just divided the household duties and financial contributions on a transparent ledger, all this ambient daily irritability would melt away. Why is discussing actual logical chores treated as light coercion or a personal attack?",
+        sentiment: "Analytical/Stressed",
+        keyIssues: ["Structural Security", "Responsibility"]
+      },
+      {
+        content: "I bought a shared chore calendar today. Taylor threw it in the junk drawer under some takeout menus. I feel so invisible and dismissed.",
+        sentiment: "Resentful",
+        keyIssues: ["Structural Security"]
+      },
+      {
+        content: "I wanted to sit down and discuss our household financial budget. They said they were too tired. Isn't mutual clarity a form of respect and partnership support?",
+        sentiment: "Stressed",
+        keyIssues: ["Structural Security", "Responsibility"]
+      },
+      {
+        content: "Why does Taylor interpret scheduling as a cold cage? To me, a structured calendar is light itself—it frees up actual stress-free time to spend together.",
+        sentiment: "Contemplative",
+        keyIssues: ["Autonomy"]
+      },
+      {
+        content: "In the car they said I over-optimize everything. They said the GPS calculations, packing logs, and schedules take the fun out of travel.",
+        sentiment: "Dismissed",
+        keyIssues: ["Pacing"]
+      },
+      {
+        content: "Woke up feeling anxious. Taylor stayed up late scrolling their phone, and I couldn't get a sweet, direct reassurance before sleep.",
+        sentiment: "Anxious",
+        keyIssues: ["Intimacy"]
+      },
+      {
+        content: "We tried to discuss holiday planning. Taylor immediately said 'we have plenty of time' and deferred. Deflection of responsibilities is so painful.",
+        sentiment: "Exasperated",
+        keyIssues: ["Responsibility"]
+      },
+      {
+        content: "I designed a weekend itinerary to prevent us from idling in indecision. Taylor rejected it instantly, calling it a chore-board choreography manual.",
+        sentiment: "Misunderstood",
+        keyIssues: ["Structural Security"]
+      }
+    ];
+    const res = [];
+    const baseDate = new Date("2026-05-15T10:00:00Z");
+    for (let i = 0; i < 30; i++) {
+      const curDate = new Date(baseDate);
+      curDate.setDate(baseDate.getDate() + i);
+      const dayStr = curDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + ` @ 10:${String(10 + i).padStart(2, '0')} AM`;
+      const baseEntry = baseA[i % baseA.length];
+      res.push({
+        id: `entryA-${i + 1}`,
+        content: i >= baseA.length ? `${baseEntry.content} (Daily reflection log note: deepening our analysis of structural friction) [A-Node ${i + 1}]` : baseEntry.content,
+        timestamp: dayStr,
+        sentiment: baseEntry.sentiment,
+        keyIssues: baseEntry.keyIssues
+      });
+    }
+    return res.reverse();
+  };
+
+  const localGeneratePartnerB = () => {
+    const baseB = [
+      {
+        content: "Alex makes every conversation feel like a courtroom hearing. Whenever we hit a bump, they want to analyze it on the spot before I can even catch my breath. My nervous system triggers defensively, and I shut down because I feel cornered. I need space to decompress first.",
+        sentiment: "Cornered",
+        keyIssues: ["Pacing", "Intimacy"]
+      },
+      {
+        content: "They tried to make me sign a literal weekend 'chore contract' and calendar every chore on a shared tracking app yesterday. It made me feel like an employee rather than a partner, with someone always watching my output. It kills any genuine organic desire of mine to cooperate.",
+        sentiment: "Suppressed / Resentful",
+        keyIssues: ["Autonomy", "Responsibility"]
+      },
+      {
+        content: "I want a warm, collaborative life, not an accounting firm. We should be doing things because we care about each other, not because of some spreadsheet ledger. It feels like Alex prioritizes administrative control over actual emotional connection.",
+        sentiment: "Disconnected",
+        keyIssues: ["Emotional Harmony", "Autonomy"]
+      },
+      {
+        content: "I just need a few hours of quiet before planning things. Alex tracks my silence like a crime scene investigator checking for structural faults.",
+        sentiment: "Smothered",
+        keyIssues: ["Pacing"]
+      },
+      {
+        content: "They showed me a color-coded budget tracker today. I felt a tight knot in my chest. Why are we talking about utility vectors instead of our heart-level support?",
+        sentiment: "Shut Down",
+        keyIssues: ["Emotional Harmony"]
+      },
+      {
+        content: "I went on a long run to clear my head. Alex texted me three times asking when we can schedule our dialogue swap. Let me breathe first!",
+        sentiment: "Pressured",
+        keyIssues: ["Autonomy"]
+      },
+      {
+        content: "I packed for our trip light and loose. Alex re-packed my entire suitcase to optimize spatial dynamics. I felt like an incompetent child around them.",
+        sentiment: "Incompetent",
+        keyIssues: ["Autonomy", "Pacing"]
+      },
+      {
+        content: "They want me to tell them exactly what we will do on Sunday. I don't know what I'll want representing breakfast until I actually wake up!",
+        sentiment: "Cornered",
+        keyIssues: ["Autonomy", "Pacing"]
+      },
+      {
+        content: "Sometimes I feel that if I don't agree to their structured plans, they treat me like a negligent roommate rather than a spouse.",
+        sentiment: "Isolated",
+        keyIssues: ["Emotional Harmony"]
+      },
+      {
+        content: "The constant tracking takes away the magic. I want to buy them flowers on a random Wednesday because I love them, not because it is cataloged on a task row.",
+        sentiment: "Numbed",
+        keyIssues: ["Emotional Harmony", "Autonomy"]
+      }
+    ];
+    const res = [];
+    const baseDate = new Date("2026-05-15T11:00:00Z");
+    for (let i = 0; i < 30; i++) {
+      const curDate = new Date(baseDate);
+      curDate.setDate(baseDate.getDate() + i);
+      const dayStr = curDate.toLocaleDateString("en-US", { month: "short", day: "numeric" }) + ` @ 11:${String(10 + i).padStart(2, '0')} AM`;
+      const baseEntry = baseB[i % baseB.length];
+      res.push({
+        id: `entryB-${i + 1}`,
+        content: i >= baseB.length ? `${baseEntry.content} (Sandbox release log: exploring emotional space boundaries) [B-Node ${i + 1}]` : baseEntry.content,
+        timestamp: dayStr,
+        sentiment: baseEntry.sentiment,
+        keyIssues: baseEntry.keyIssues
+      });
+    }
+    return res.reverse();
+  };
+
+  // --- Initial State setup matching high-fidelity presets ---
+  const [partnerA, setPartnerA] = useState<PartnerProfile>({
+    name: 'Alex',
+    role: 'Analytical Partner seeking structural safety and clarity',
+    journalEntries: localGeneratePartnerA(),
+    chatHistory: [
+      { id: 'chatA-1', sender: 'assistant', content: 'Hello Alex. This is your private sanctuary. Let us explore how you feel inside your relationship without any defensive feedback.', timestamp: '9:25 AM' }
+    ],
+    coreValues: ['Security & Peace', 'Immediate Reassurance', 'Structured Responsibility'],
+    hiddenInjectedReflections: []
+  });
+
+  const [partnerB, setPartnerB] = useState<PartnerProfile>({
+    name: 'Taylor',
+    role: 'Spontaneous Partner seeking emotional connection and cadence freedom',
+    journalEntries: localGeneratePartnerB(),
+    chatHistory: [
+      { id: 'chatB-1', sender: 'assistant', content: 'Hello Taylor. Welcome. This is your completely private, unsupervised sandbox. What is feeling heaviest for you today?', timestamp: '10:15 AM' }
+    ],
+    coreValues: ['Autonomy & Freedom', 'Emotional Harmonization', 'Flexible Cadence'],
+    hiddenInjectedReflections: []
+  });
+
+  const [conflictContext, setConflictContext] = useState<ConflictContext>({
+    topic: 'Unidentified Undercurrent',
+    description: 'A continuous coldness and irritability is felt daily, but neither can locate the single triggering event.',
+    partnerA_view: 'Every conversation feels loaded. I feel like I walk on eggshells, constantly monitored and destined to disappoint.',
+    partnerB_view: 'I feel lonely even when we occupy the same room. I have withdrawn because attempts to engage turn into critique.',
+    worksheetData: undefined
+  });
+
+  const [synthesis, setSynthesis] = useState<SynthesisReport | null>(null);
+  const [isSynthesizing, setIsSynthesizing] = useState(false);
+  const [scheduledDialogues, setScheduledDialogues] = useState<ScheduledDialogue[]>([]);
+
+  const [isLoadingSession, setIsLoadingSession] = useState(true);
+
+  useEffect(() => {
+    const loadSession = async () => {
+      try {
+        const res = await fetch('/api/session');
+        if (res.ok) {
+          const data = await res.json();
+          if (data.partnerA) {
+            setPartnerA(data.partnerA);
+            setPartnerAName(data.partnerA.name || 'Alex');
+          }
+          if (data.partnerB) {
+            setPartnerB(data.partnerB);
+            setPartnerBName(data.partnerB.name || 'Taylor');
+          }
+          if (data.conflictContext) setConflictContext(data.conflictContext);
+          if (data.synthesis) setSynthesis(data.synthesis);
+          if (data.scheduledDialogues) setScheduledDialogues(data.scheduledDialogues);
+        }
+      } catch (err) {
+        console.error("Failed to load session from backend server database:", err);
+      } finally {
+        setIsLoadingSession(false);
+      }
+    };
+    loadSession();
+  }, []);
+
+  useEffect(() => {
+    if (isLoadingSession) return;
+    const saveSession = async () => {
+      try {
+        await fetch('/api/session', {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            partnerA,
+            partnerB,
+            conflictContext,
+            synthesis,
+            scheduledDialogues
+          })
+        });
+      } catch (err) {
+        console.error("Failed to sync session with backend server database:", err);
+      }
+    };
+
+    const timer = setTimeout(saveSession, 600);
+    return () => clearTimeout(timer);
+  }, [partnerA, partnerB, conflictContext, synthesis, scheduledDialogues, isLoadingSession]);
+
+  // --- Dynamic trigger running background synthesis ---
+  const handleRunSynthesis = async () => {
+    setIsSynthesizing(true);
+    try {
+      const response = await fetch('/api/synthesis', {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({
+          partnerA,
+          partnerB,
+          conflictContext
+        })
+      });
+
+      const report: SynthesisReport = await response.json();
+      setSynthesis(report);
+
+      // Secretly inject generated reflection directives into individual rooms
+      setPartnerA(prev => ({
+        ...prev,
+        hiddenInjectedReflections: report.partnerA_injections || []
+      }));
+      
+      setPartnerB(prev => ({
+        ...prev,
+        hiddenInjectedReflections: report.partnerB_injections || []
+      }));
+
+    } catch (err) {
+      console.error(err);
+      // Fallback state on error, maintaining interactivity
+      alert("Relational Synthesis compilation encountered a network error. Loading offline simulation metrics instead.");
+    } finally {
+      setIsSynthesizing(false);
+    }
+  };
+
+  const handleAddDialogue = (newD: ScheduledDialogue) => {
+    setScheduledDialogues([...scheduledDialogues, newD]);
+  };
+
+  const handleDeleteDialogue = (id: string) => {
+    setScheduledDialogues(scheduledDialogues.filter(item => item.id !== id));
+  };
+
+  return (
+    <div className="min-h-screen bg-[#FAF9F6] text-[#4A4A40] flex flex-col font-sans">
+      
+      {/* Navigation Top Header */}
+      <header className="sticky top-0 bg-[#FAF9F6]/90 backdrop-blur-md border-b border-[#E5E2D9] px-6 py-4 flex items-center justify-between z-50">
+        
+        {/* Left branding */}
+        <div className="flex items-center gap-2">
+          <div className="w-9 h-9 rounded-full bg-[#5A5A40] flex items-center justify-center text-white">
+            <Heart className="w-4 h-4 text-white fill-white/20 animate-pulse" />
+          </div>
+          <div>
+            <span className="text-[10px] font-mono font-medium tracking-widest text-[#8C8C7F] block uppercase leading-none">
+              Symmetry Lab
+            </span>
+            <span className="text-sm font-serif italic text-[#33332D] font-bold leading-tight">
+              Relational Clarity Space
+            </span>
+          </div>
+        </div>
+
+        {/* Center Workspace select bar */}
+        {activeWorkspace !== 'intro' && (
+          <nav className="hidden md:flex bg-[#F0EEE6] border border-[#E5E2D9] p-1 rounded-xl gap-1">
+            <button
+              id="switch-a-btn"
+              onClick={() => setActiveWorkspace('partnerA')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-serif transition flex items-center gap-1.5 cursor-pointer ${
+                activeWorkspace === 'partnerA' 
+                  ? 'bg-[#FAF9F6] text-[#546B54]/90 border border-[#E5E2D9] shadow-xs font-semibold'
+                  : 'text-[#8C8C7F] hover:text-[#4A4A40]'
+              }`}
+            >
+              <Lock className="w-3.5 h-3.5 text-[#5A5A40]" />
+              {conflictContext.revMode === 'single' ? "My Private Workspace" : `${partnerAName}'s Sanctuary`}
+            </button>
+            {conflictContext.revMode !== 'single' && (
+              <button
+                id="switch-b-btn"
+                onClick={() => setActiveWorkspace('partnerB')}
+                className={`px-3.5 py-1.5 rounded-lg text-xs font-serif transition flex items-center gap-1.5 cursor-pointer ${
+                  activeWorkspace === 'partnerB' 
+                    ? 'bg-[#FAF9F6] text-[#D18B6B] border border-[#E5E2D9] shadow-xs font-semibold'
+                    : 'text-[#8C8C7F] hover:text-[#4A4A40]'
+                }`}
+              >
+                <Lock className="w-3.5 h-3.5 text-[#D18B6B]" />
+                {partnerBName}'s Sanctuary
+              </button>
+            )}
+            <button
+              id="switch-synth-btn"
+              onClick={() => setActiveWorkspace('synthesis')}
+              className={`px-3.5 py-1.5 rounded-lg text-xs font-mono transition flex items-center gap-1.5 cursor-pointer ${
+                activeWorkspace === 'synthesis' 
+                  ? 'bg-[#5A5A40] text-white shadow-xs'
+                  : 'text-[#8C8C7F] hover:text-[#4A4A40]'
+              }`}
+            >
+              <Sparkles className="w-3.5 h-3.5 text-white" />
+              {conflictContext.revMode === 'single' ? "My Relational Passport blueprint" : "Synthesis Hub"}
+            </button>
+          </nav>
+        )}
+
+        {/* Right Action Bar */}
+        <div className="flex items-center gap-3">
+          {activeWorkspace !== 'intro' ? (
+            <button
+              id="reset-workspace-btn"
+              onClick={() => setActiveWorkspace('intro')}
+              className="px-3.5 py-2 rounded-xl border border-[#E5E2D9] hover:bg-[#F2EFE8] hover:border-[#C5C2B9] transition text-xs font-medium text-[#6B6B5E] flex items-center gap-1.5 cursor-pointer active:scale-95 shadow-xs"
+            >
+              <LogOut className="w-3.5 h-3.5" /> Reconfigure
+            </button>
+          ) : (
+            <div className="text-xs text-[#8C8C7F] font-mono hidden sm:block">
+              Standalone Relationship Simulator
+            </div>
+          )}
+        </div>
+      </header>
+
+      {/* Mobile workspace selector bar */}
+      {activeWorkspace !== 'intro' && (
+        <div className="md:hidden bg-[#FAF9F6]/95 border-b border-[#E5E2D9] p-2 flex gap-1 justify-around">
+          <button
+            id="switch-a-btn-mobile"
+            onClick={() => setActiveWorkspace('partnerA')}
+            className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition flex items-center justify-center gap-1 cursor-pointer ${
+              activeWorkspace === 'partnerA' ? 'bg-[#FAF9F6] text-[#546B54]/90 border border-[#8DA58D]/40 shadow-xs' : 'text-[#8C8C7F]'
+            }`}
+          >
+            {conflictContext.revMode === 'single' ? "My Private Space" : partnerAName}
+          </button>
+          {conflictContext.revMode !== 'single' && (
+            <button
+              id="switch-b-btn-mobile"
+              onClick={() => setActiveWorkspace('partnerB')}
+              className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition flex items-center justify-center gap-1 cursor-pointer ${
+                activeWorkspace === 'partnerB' ? 'bg-[#F5F2ED] text-[#D18B6B] border border-[#D18B6B]/40 shadow-xs' : 'text-[#8C8C7F]'
+              }`}
+            >
+              {partnerBName || "Partner B"}
+            </button>
+          )}
+          <button
+            id="switch-synth-btn-mobile"
+            onClick={() => setActiveWorkspace('synthesis')}
+            className={`flex-1 py-2 rounded-lg text-[11px] font-medium transition flex items-center justify-center gap-1 cursor-pointer ${
+              activeWorkspace === 'synthesis' ? 'bg-[#5A5A40] text-white shadow-xs' : 'text-[#8C8C7F]'
+            }`}
+          >
+            {conflictContext.revMode === 'single' ? "My Blueprint" : "Synthesis"}
+          </button>
+        </div>
+      )}
+
+      {/* Primary Main Content Board */}
+      <main className="flex-1 max-w-7xl w-full mx-auto pb-16">
+        
+        {activeWorkspace === 'intro' && (
+          <IntroductionPanel
+            partnerAName={partnerAName}
+            partnerBName={partnerBName}
+            setPartnerAName={(name) => {
+              setPartnerAName(name);
+              setPartnerA(prev => ({ ...prev, name }));
+            }}
+            setPartnerBName={(name) => {
+              setPartnerBName(name);
+              setPartnerB(prev => ({ ...prev, name }));
+            }}
+            conflictContext={conflictContext}
+            setConflictContext={setConflictContext}
+            partnerA={partnerA}
+            setPartnerA={setPartnerA}
+            partnerB={partnerB}
+            setPartnerB={setPartnerB}
+            onStart={(rev) => {
+              // Store exploration mode context
+              setConflictContext(prev => ({ ...prev, revMode: rev }));
+              // Run background analysis immediately to pre-set alignment details
+              handleRunSynthesis();
+              setActiveWorkspace('partnerA');
+            }}
+          />
+        )}
+
+        {activeWorkspace === 'partnerA' && (
+          <PartnerSpace
+            partnerKey="partnerA"
+            profile={partnerA}
+            partnerName={partnerAName}
+            opponentName={partnerBName}
+            conflictContext={conflictContext}
+            updateProfile={setPartnerA}
+            onRunSynthesis={handleRunSynthesis}
+            isSynthesizing={isSynthesizing}
+            synthesis={synthesis}
+          />
+        )}
+
+        {activeWorkspace === 'partnerB' && (
+          <PartnerSpace
+            partnerKey="partnerB"
+            profile={partnerB}
+            partnerName={partnerBName}
+            opponentName={partnerAName}
+            conflictContext={conflictContext}
+            updateProfile={setPartnerB}
+            onRunSynthesis={handleRunSynthesis}
+            isSynthesizing={isSynthesizing}
+            synthesis={synthesis}
+          />
+        )}
+
+        {activeWorkspace === 'synthesis' && (
+          <SynthesisHub
+            synthesis={synthesis}
+            conflictContext={conflictContext}
+            partnerAName={partnerAName}
+            partnerBName={partnerBName}
+            onRunSynthesis={handleRunSynthesis}
+            isSynthesizing={isSynthesizing}
+            scheduledDialogues={scheduledDialogues}
+            onAddDialogue={handleAddDialogue}
+            onDeleteDialogue={handleDeleteDialogue}
+          />
+        )}
+
+      </main>
+
+      {/* Floating Status Bar - reminding of secret source rules */}
+      {activeWorkspace !== 'intro' && activeWorkspace !== 'synthesis' && (
+        <div className="fixed bottom-4 left-1/2 -translate-x-1/2 bg-[#5A5A40] text-[#FAF9F6] px-4 py-2 rounded-full border border-[#4A4A33] shadow-lg flex items-center gap-3 text-[11px] z-50">
+          <span className="flex items-center gap-1 text-[#FAF9F6] font-mono font-bold uppercase tracking-wider text-[10px]">
+            <span className="w-2 h-2 bg-emerald-400 rounded-full animate-ping" />
+            SYNCHRONIZED
+          </span>
+          <span className="h-4 w-[1px] bg-[#FAF9F6]/25" />
+          <span>Currently in <b className="text-[#FAF9F6] font-serif italic">{activeWorkspace === 'partnerA' ? partnerAName : partnerBName}</b>'s private partition.</span>
+          <span className="h-4 w-[1px] bg-[#FAF9F6]/25" />
+          <button
+            id="quick-swap-btn"
+            onClick={() => setActiveWorkspace(activeWorkspace === 'partnerA' ? 'partnerB' : 'partnerA')}
+            className="text-white hover:underline transition font-serif italic font-medium flex items-center gap-0.5 uppercase tracking-wider text-[10px] cursor-pointer"
+          >
+            Switch Rooms <ChevronRight className="w-3.5 h-3.5" />
+          </button>
+        </div>
+      )}
+
+      {/* Background elegant branding footer */}
+      <footer className="border-t border-[#E5E2D9] bg-[#F5F2ED] py-6 px-8 text-center text-[#8C8C7F] text-xs font-sans">
+        <p>© 2026 Relational Symmetry Lab. Underpinning structural dialogue systems. Built for constructive speech. Styled in Natural Tones.</p>
+      </footer>
+
+    </div>
+  );
+}
